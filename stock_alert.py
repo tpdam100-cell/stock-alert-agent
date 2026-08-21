@@ -5,38 +5,11 @@ TELEGRAM_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 FINNHUB_KEY = os.environ["FINNHUB_API_KEY"]
 
-# Aandelen die we voorlopig controleren
-stocks = [
-    # AEX
-    "ASML",
-    "ADYEN",
-    "INGA",
-    "PHIA",
-    "HEIA",
-    "UNA",
-    "WKL",
-    "PRX",
-    "ASM",
-    "BESI",
-
-    # Grote Amerikaanse aandelen
-    "AAPL",
-    "MSFT",
-    "NVDA",
-    "AMZN",
-    "META",
-    "TSLA",
-    "GOOGL",
-    "AMD",
-    "NFLX",
-    "PLTR",
-]
-
 
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
-    requests.post(
+    response = requests.post(
         url,
         data={
             "chat_id": CHAT_ID,
@@ -44,17 +17,22 @@ def send_telegram(message):
         }
     )
 
+    response.raise_for_status()
+
 
 def check_stock(symbol):
-
     url = "https://finnhub.io/api/v1/quote"
 
-    params = {
-        "symbol": symbol,
-        "token": FINNHUB_KEY
-    }
+    response = requests.get(
+        url,
+        params={
+            "symbol": symbol,
+            "token": FINNHUB_KEY
+        }
+    )
 
-    response = requests.get(url, params=params)
+    response.raise_for_status()
+
     data = response.json()
 
     current = data.get("c")
@@ -65,18 +43,22 @@ def check_stock(symbol):
 
     change = ((current - previous) / previous) * 100
 
-    if change >= 30:
+    print(f"{symbol}: {change:.2f}%")
 
-        message = (
-            "🚨 AANDEEL ALERT\n\n"
-            f"{symbol} is vandaag +{change:.1f}%\n\n"
+    if change >= 30:
+        send_telegram(
+            f"🚨 AANDEEL ALERT\n\n"
+            f"{symbol} +{change:.1f}% vandaag\n\n"
             f"Koers: {current}\n"
-            f"Vorige slotkoers: {previous}\n\n"
-            "Bron: Finnhub"
+            f"Vorige slotkoers: {previous}"
         )
 
-        send_telegram(message)
 
+# Testaandelen
+stocks = [
+    "ASML",
+    "NVDA"
+]
 
-for stock in stocks:
-    check_stock(stock)
+for symbol in stocks:
+    check_stock(symbol)
