@@ -1,9 +1,13 @@
 import os
+import json
 import requests
+from datetime import datetime
 
 TELEGRAM_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 FINNHUB_KEY = os.environ["FINNHUB_API_KEY"]
+
+ALERT_FILE = "alerts.json"
 
 
 def send_telegram(message):
@@ -20,7 +24,21 @@ def send_telegram(message):
     response.raise_for_status()
 
 
-def check_stock(symbol):
+def load_alerts():
+    try:
+        with open(ALERT_FILE, "r") as file:
+            return json.load(file)
+    except:
+        return {}
+
+
+def save_alerts(alerts):
+    with open(ALERT_FILE, "w") as file:
+        json.dump(alerts, file, indent=2)
+
+
+def check_stock(symbol, alerts):
+
     url = "https://finnhub.io/api/v1/quote"
 
     response = requests.get(
@@ -45,20 +63,35 @@ def check_stock(symbol):
 
     print(f"{symbol}: {change:.2f}%")
 
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+
     if change >= 30:
-        send_telegram(
-            f"🚨 AANDEEL ALERT\n\n"
+
+        if alerts.get(symbol) == today:
+            return
+
+        message = (
+            "🚨 AANDEEL ALERT\n\n"
             f"{symbol} +{change:.1f}% vandaag\n\n"
             f"Koers: {current}\n"
             f"Vorige slotkoers: {previous}"
         )
 
+        send_telegram(message)
 
-# Testaandelen
-stocks = [
-    "ASML",
-    "NVDA"
-]
+        alerts[symbol] = today
+
+
+alerts = load_alerts()
+
+with open("stocks.txt", "r") as file:
+    stocks = [
+        line.strip()
+        for line in file
+        if line.strip()
+    ]
 
 for symbol in stocks:
-    check_stock(symbol)
+    check_stock(symbol, alerts)
+
+save_alerts(alerts)
