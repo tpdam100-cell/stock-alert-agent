@@ -72,9 +72,19 @@ def check_gainers():
         symbol = stock.get("ticker")
         price = stock.get("price")
         change = stock.get("change_percentage")
-
+            
         if not symbol or not change:
-            continue
+    continue
+
+# Warrants, units, rights en vergelijkbare instrumenten uitsluiten
+if (
+    symbol.endswith("W")
+    or symbol.endswith("U")
+    or symbol.endswith("R")
+    or "+" in symbol
+):
+    print(f"Overgeslagen (geen gewoon aandeel): {symbol}")
+    continue
 
         try:
             change_value = float(
