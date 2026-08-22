@@ -5,7 +5,7 @@ from datetime import datetime
 
 TELEGRAM_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
-FINNHUB_KEY = os.environ["FINNHUB_API_KEY"]
+ALPHA_KEY = os.environ["ALPHAVANTAGE_API_KEY"]
 
 ALERT_FILE = "alerts.json"
 
@@ -37,61 +37,71 @@ def save_alerts(alerts):
         json.dump(alerts, file, indent=2)
 
 
-def check_stock(symbol, alerts):
+def get_top_gainers():
 
-    url = "https://finnhub.io/api/v1/quote"
+    url = "https://www.alphavantage.co/query"
 
-    response = requests.get(
-        url,
-        params={
-            "symbol": symbol,
-            "token": FINNHUB_KEY
-        }
-    )
+    params = {
+        "function": "TOP_GAINERS_LOSERS",
+        "apikey": ALPHA_KEY
+    }
 
+    response = requests.get(url, params=params)
     response.raise_for_status()
 
     data = response.json()
 
-    current = data.get("c")
-    previous = data.get("pc")
+    if "top_gainers" not in data:
+        print("Geen top gainers ontvangen.")
+        print(data)
+        return []
 
-    if not current or not previous:
-        return
+    return data["top_gainers"]
 
-    change = ((current - previous) / previous) * 100
 
-    print(f"{symbol}: {change:.2f}%")
+def check_gainers():
+
+    alerts = load_alerts()
 
     today = datetime.utcnow().strftime("%Y-%m-%d")
 
-    if change >= 30:
+    gainers = get_top_gainers()
 
-        if alerts.get(symbol) == today:
-            return
+    for stock in gainers:
 
-        message = (
-            "🚨 AANDEEL ALERT\n\n"
-            f"{symbol} +{change:.1f}% vandaag\n\n"
-            f"Koers: {current}\n"
-            f"Vorige slotkoers: {previous}"
-        )
+        symbol = stock.get("ticker")
+        price = stock.get("price")
+        change = stock.get("change_percentage")
 
-        send_telegram(message)
+        if not symbol or not change:
+            continue
 
-        alerts[symbol] = today
+        try:
+            change_value = float(
+                change.replace("%", "")
+            )
+        except:
+            continue
+
+        print(f"{symbol}: {change_value}%")
+
+        if change_value >= 30:
+
+            if alerts.get(symbol) == today:
+                continue
+
+            message = (
+                "🚨 AANDEEL ALERT\n\n"
+                f"{symbol} +{change_value:.1f}% vandaag\n\n"
+                f"Koers: {price}\n\n"
+                "Bron: Alpha Vantage"
+            )
+
+            send_telegram(message)
+
+            alerts[symbol] = today
+
+    save_alerts(alerts)
 
 
-alerts = load_alerts()
-
-with open("stocks.txt", "r") as file:
-    stocks = [
-        line.strip()
-        for line in file
-        if line.strip()
-    ]
-
-for symbol in stocks:
-    check_stock(symbol, alerts)
-
-save_alerts(alerts)
+check_gainers()
